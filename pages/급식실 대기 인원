@@ -1,1 +1,114 @@
+import streamlit as st
+import google.generativeai as genai
 
+# -----------------------------
+# 페이지 설정
+# -----------------------------
+st.set_page_config(
+    page_title="급식실 대기 인원 챗봇",
+    page_icon="🍽️",
+    layout="centered"
+)
+
+st.title("🍽️ 급식실 대기 인원 챗봇")
+st.caption("Gemini 2.5 Flash-Lite 기반")
+
+# -----------------------------
+# API 키 불러오기
+# -----------------------------
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+    genai.configure(api_key=api_key)
+except Exception:
+    st.error("GEMINI_API_KEY가 설정되지 않았습니다.")
+    st.stop()
+
+# -----------------------------
+# 모델 생성
+# -----------------------------
+try:
+    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+except Exception as e:
+    st.error(f"모델 로딩 오류: {e}")
+    st.stop()
+
+# -----------------------------
+# 채팅 기록 저장
+# -----------------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {
+            "role": "assistant",
+            "content": (
+                "안녕하세요! 🍽️\n\n"
+                "저는 급식실 대기 인원 안내 챗봇입니다.\n"
+                "예시 질문:\n"
+                "- 지금 급식실 얼마나 붐벼?\n"
+                "- 점심시간 혼잡도를 알려줘\n"
+                "- 대기 시간이 얼마나 될까?"
+            )
+        }
+    ]
+
+# -----------------------------
+# 이전 채팅 출력
+# -----------------------------
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# -----------------------------
+# 사용자 입력
+# -----------------------------
+user_input = st.chat_input("질문을 입력하세요")
+
+if user_input:
+
+    st.session_state.messages.append(
+        {"role": "user", "content": user_input}
+    )
+
+    with st.chat_message("user"):
+        st.markdown(user_input)
+
+    try:
+
+        # 최근 대화만 전달
+        history_text = "\n".join(
+            [
+                f"{m['role']}: {m['content']}"
+                for m in st.session_state.messages[-10:]
+            ]
+        )
+
+        prompt = f"""
+당신은 학교 급식실 안내 챗봇입니다.
+
+규칙:
+- 친절하게 답변
+- 급식실 혼잡도, 대기시간 관련 질문에 도움 제공
+- 실제 데이터가 없으면 추정이라고 설명
+- 한국어로 답변
+
+대화 기록:
+{history_text}
+
+답변:
+"""
+
+        response = model.generate_content(prompt)
+
+        answer = response.text
+
+    except Exception as e:
+        answer = (
+            "⚠️ 현재 응답을 생성할 수 없습니다.\n\n"
+            f"오류 내용: {str(e)}"
+        )
+
+    st.session_state.messages.append(
+        {"role": "assistant", "content": answer}
+    )
+
+    with st.chat_message("assistant"):
+        st.markdown(answer)
